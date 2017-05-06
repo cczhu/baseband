@@ -238,7 +238,7 @@ class Mark4Header(Mark4TrackHeader):
     _track_header = Mark4TrackHeader
     _properties = (Mark4TrackHeader._properties +
                    ('ntrack', 'framesize', 'payloadsize', 'fanout',
-                    'samples_per_frame', 'bps', 'nchan'))
+                    'samples_per_frame', 'bps', 'converters', 'nchan'))
     _dtypes = {1: 'b',
                2: 'u1',
                4: 'u1',
@@ -246,6 +246,27 @@ class Mark4Header(Mark4TrackHeader):
                16: '<u2',
                32: '<u4',
                64: '<u8'}
+
+    # keyed with bps, fanout; Tables 10-14 in reference documentation:
+    # http://www.haystack.mit.edu/tech/vlbi/mark5/docs/230.3.pdf
+    _track_assignments = {
+        (2, 4): np.array([[2, 10, 3, 11, 18, 26, 19, 27],
+                          [4, 12, 5, 13, 20, 28, 21, 29],
+                          [6, 14, 7, 15, 22, 30, 23, 31],
+                          [8, 16, 9, 17, 24, 32, 25, 33]]),
+        (1, 4): np.array([[2, 3, 10, 11, 18, 19, 26, 27],
+                          [4, 5, 12, 13, 20, 21, 28, 29],
+                          [6, 7, 14, 15, 22, 23, 30, 31],
+                          [8, 9, 16, 17, 24, 25, 32, 33]]),
+        (2, 2): np.array(
+            [[2, 6, 3, 7, 10, 14, 11, 15, 18, 22, 19, 23, 26, 30, 27, 31],
+             [4, 8, 5, 9, 12, 16, 13, 17, 20, 24, 21, 25, 28, 32, 29, 33]]),
+        (1, 2): np.array(
+            [[2, 3, 6, 7, 10, 11, 14, 15, 18, 19, 22, 23, 26, 27, 30, 31],
+             [4, 5, 8, 9, 12, 13, 16, 17, 20, 21, 24, 25, 28, 29, 32, 33]]),
+        (2, 1): np.array(
+            [[2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32,
+              3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33]])}
 
     def __init__(self, words, ntrack=None, decade=None, verify=True):
         if words is None:
@@ -271,6 +292,27 @@ class Mark4Header(Mark4TrackHeader):
     @property
     def stream_dtype(self):
         return self.__class__._stream_dtype(self.ntrack)
+
+    @classmethod
+    def _track_assignment(cls, ntrack, bps, fanout):
+        try:
+            # Tracks are numbered starting at 2, so subtract 2.
+            ta = cls._track_assignments[(bps, fanout)] - 2
+        except KeyError:
+            raise ValueError("Mark 4 reader does not support bps={0}, "
+                             "fanout={1}; supported are {2}".format(
+                                 bps, fanout, cls._track_assignments.keys()))
+        # reshape to get dimensions: fanout, channel, sign/mag
+        ta.shape = fanout, -1, bps
+        if ntrack == 64:
+            # double up the number of tracks and channels.
+            ta = np.concatenate((ta, ta + 32), axis=1)
+        return ta
+
+    @property
+    def track_assignment(self):
+        return self.__class__._track_assignment(self.ntrack, self.bps,
+                                                self.fanout)
 
     @classmethod
     def fromfile(cls, fh, ntrack, decade=None, verify=True):
@@ -382,8 +424,11 @@ class Mark4Header(Mark4TrackHeader):
             self['headstack_id'] = np.repeat(np.arange(2), 32)
             self.track_id = np.repeat(np.arange(2, 34)[np.newaxis, :],
                                       2, axis=0).ravel()
+        elif ntrack == 32:
+            self['headstack_id'] = np.zeros(32, dtype=int)
+            self.track_id = np.arange(2, 34)
         else:
-            raise ValueError("Only can set ntrack=64 so far.")
+            raise ValueError("Only can set ntrack=64 or 32 so far.")
 
     @property
     def size(self):
@@ -439,20 +484,50 @@ class Mark4Header(Mark4TrackHeader):
 
     @bps.setter
     def bps(self, bps):
-        if bps == 1:
-            self['magnitude_bit'] = False
-        elif bps == 2:
-            self['magnitude_bit'] = np.repeat(
-                np.repeat(np.array([False, True]),
-                          self.fanout * 2)[np.newaxis, :],
-                self.ntrack // 4 // self.fanout, axis=0).ravel()
-        else:
-            raise ValueError("Mark 4 data only supports 1 or 2 bits/sample")
+        # need to use class method, since self.bps is not set yet.
+        ta = self.__class__._track_assignment(self.ntrack, bps, self.fanout)
+        # Note: cannot assign to slice of header property, so go via array.
+        magnitude_bit = np.empty(self.ntrack, dtype=bool)
+        magnitude_bit[ta] = np.array([False, True], dtype=bool)[:bps]
+        self['magnitude_bit'] = magnitude_bit
 
-        nchan = self.ntrack // self.fanout // bps
-        self['converter_id'] = np.repeat(
-            np.arange(nchan).reshape(-1, 2, 2).transpose(0, 2, 1),
-            self.ntrack // nchan, axis=1).ravel()
+        # set default converters; can be overridden if needed.
+        sb = self['lsb_output']
+        nconverter = ta.shape[1] // (1 if np.all(sb == sb[0]) else 2)
+        converters = np.arange(nconverter)
+        if nconverter > 2:
+            converters = (converters.reshape(-1, 2, 2)
+                          .transpose(0, 2, 1).ravel())
+        self.converters = converters
+
+    @property
+    def converters(self):
+        return self['converter_id'][self.track_assignment[0, :, 0]]
+
+    @converters.setter
+    def converters(self, converters):
+        # set converters, duplicating over fanout, lsb, magnitude bit.
+        ta = self.track_assignment
+        sb = self['lsb_output']
+        nsb = 1 if np.all(sb == sb[0]) else 2
+        if len(converters) != ta.shape[1] // nsb:
+            raise ValueError('Mark 4 file with bps={0}, fanout={1} and {2} '
+                             'needs to define {3} converters'
+                             .format(self.bps, self.fanout,
+                                     ('a single sideband' if nsb == 1
+                                      else 'two sidebands'),
+                                     ta.shape[1] // nsb))
+
+        if nsb == 2:
+            c = np.empty(ta.shape[1], dtype=int)
+            sb0 = sb[ta[0, :, 0]]
+            c[sb0] = c[~sb0] = converters
+            converters = c
+
+        # Note: cannot assign to slice of header property, so go via array.
+        converter_id = np.empty(self.ntrack, dtype=int)
+        converter_id[ta] = converters[:, np.newaxis]
+        self['converter_id'] = converter_id
 
     @property
     def nchan(self):
