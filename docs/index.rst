@@ -16,4 +16,6 @@ Documentation
 
   baseband/index.rst
 
+  baseband/code_struct.rst
+
   authors_for_sphinx
