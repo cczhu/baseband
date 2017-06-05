@@ -63,27 +63,43 @@ VDIF Base Reader Classes
 :class:`~baseband.vdif.base.VDIFStreamReader`; the call to it in the
 :ref:`code block <cs_vdif_intro>` at the start of the section is equivalent to::
 
+>>> import io
 >>> name = io.open(SAMPLE_VDIF, 'rb')
 >>> fhr = vdif.base.VDIFFileReader(name)
 >>> fh = vdif.base.VDIFStreamReader(fhr)
 
 :class:`~baseband.vdif.base.VDIFFileReader` is a subclass of 
-:class:`io.BufferedReader` that adds the :func:`~baseband.vdif.base.VDIFFileReader.read_frame()`,
-:func:`~baseband.vdif.base.VDIFFileReader.read_frameset()` and
-:func:`~baseband.vdif.base.VDIFFileReader.find_header()` methods.  The former
+:class:`io.BufferedReader` that adds the :meth:`~baseband.vdif.base.VDIFFileReader.read_frame()`,
+:meth:`~baseband.vdif.base.VDIFFileReader.read_frameset()` and
+:meth:`~baseband.vdif.base.VDIFFileReader.find_header()` methods.  The former
 two are wrappers around the class methods 
-:func:`VDIFFrame.fromdata() <baseband.vdif.frame.VDIFFrame.fromdata>` and 
-:func:`VDIFFrameSet.fromdata() <baseband.vdif.frame.VDIFFrameSet.fromdata>`, 
-respectively.  The latter finds the next (or previous, if``forward=False`` is 
+:meth:`VDIFFrame.fromdata() <baseband.vdif.frame.VDIFFrame.fromdata>` and 
+:meth:`VDIFFrameSet.fromdata() <baseband.vdif.frame.VDIFFrameSet.fromdata>`, 
+respectively.  The latter finds the next (or previous, if ``forward=False`` is 
 passed to it) header instance in the stream from the file pointer's current 
 position.
 
 :class:`~baseband.vdif.base.VDIFStreamReader` takes a :class:`~baseband.vdif.base.VDIFFileReader`
-object, wraps it within :class:`~baseband.vdif.base.VDIFStreamBase`, and uses
-:class:`~baseband.vdif.header.VDIFHeader` to read the header and populate class
-properties and :func:`VDIFFileReader.read_frameset() <baseband.vdif.base.VDIFFileReader.read_frameset>`
-to read the payload.
+object, wraps it within :class:`~baseband.vdif.base.VDIFStreamBase`, which adds 
+an ``offset`` file pointer with units of samples (rather than bits) and corresponding ``seek()`` and ``tell()`` methods.  
+The class uses :class:`~baseband.vdif.header.VDIFHeader` to read the header (see 
+:ref:`below <cs_vdif_header>` and populate class properties.  The payload is 
+read by calling :meth:`VDIFStreamReader.read() <baseband.vdif.base.VDIFStreamReader.read>` ::
 
+>>> data = fh.read()
+
+This uses :meth:`VDIFFileReader.read_frameset() 
+<baseband.vdif.base.VDIFFileReader.read_frameset>` to read the payload from 
+each frameset, and is equivalent to
+
+.. _cs_vdif_header:
+
+VDIF Header Module
+------------------
+
+Raw seeking (required to 
+actually read payload and header) is available through ``VDIFStreamReader.fh_raw``,
+which points to the passed :class:`~baseband.vdif.base.VDIFFileReader` object.
 
 VDIF Writer
 ===========
