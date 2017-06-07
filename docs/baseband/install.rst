@@ -42,8 +42,8 @@ Running code without installing
 
 As baseband is pure Python, it can be used without being built or installed,
 by appending the directory it is located in to the ``PYTHON_PATH`` environment
-variable.  Alternatively, you can use ``sys.path`` within Python to append the
-path::
+variable.  Alternatively, you can use :obj:`sys.path` within Python to append 
+the path::
 
     import sys
     sys.path.append(BASEBAND_PATH)
