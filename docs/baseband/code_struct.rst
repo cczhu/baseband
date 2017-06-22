@@ -106,6 +106,7 @@ behaviour with::
     >>> # Determine file length in bytes.
     >>> fb_bytesize = fb.seek(0, 2)
     >>> fb.seek(0)
+    0
     >>> # Determine number of threads in frameset and number of framesets in file.  
     >>> # Functionally identical to thread finder in VDIFStreamReader.__init__().
     >>> first_frameset = fb.read_frameset(None)
@@ -115,14 +116,15 @@ behaviour with::
     >>> # Get number of samples per frameset.
     >>> samp_per_fset = first_frameset.header0.samples_per_frame
     >>> # Define output ndarray (number of Fourier channels nchan = 1).
-    >>> out = np.empty((nthread, samp_per_fset*nframe, 1),
-    >>>                dtype=first_frameset.dtype).transpose(1, 0, 2)
+    >>> out = np.empty((nthread, samp_per_fset*nframe, 1), \
+    ...                 dtype=first_frameset.dtype).transpose(1, 0, 2)
     >>> # Simpler version of the "while count > 0:" loop in VDIFStreamReader.read().
     >>> fb.seek(0)
+    0
     >>> for i in range(nframe):
-    >>>     cframe = fb.read_frameset(thread_ids)
-    >>>     out[i*samp_per_fset:(i + 1)*samp_per_fset] = \
-    >>>         cframe.data.transpose(1, 0, 2)
+    ...     cframe = fb.read_frameset(thread_ids)
+    ...     out[i*samp_per_fset:(i + 1)*samp_per_fset] = \
+    ...            cframe.data.transpose(1, 0, 2)
     >>> # Check that output is the same as fh.read() from above.
     >>> np.array_equal(out.squeeze(), data)
     True
@@ -137,7 +139,8 @@ be used to read subsections of the data even if we start and end in the middle
 of framesets::
 
     >>> # Set offset pointer to halfway into the first frame
-    >>> fh.seek(fh.samples_per_frame // 2);
+    >>> fh.seek(fh.samples_per_frame // 2)
+    10000
     >>> data_m = fh.read(fh.samples_per_frame)  # Read 1 frame worth of samples
     >>> data_m.shape
     (20000, 8)
