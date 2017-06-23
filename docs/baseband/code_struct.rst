@@ -213,7 +213,7 @@ which accesses the registry of EDV classes within the metaclass
 to create the appropriate class instance.
 
 New header classes can be added to the registry by subclassing them from
-:class:`~!baseband.vdif.header.VDIFHeader`, using :class:`~!baseband.vdif._VDIFHeaderRegistry>`
+:class:`~!baseband.vdif.header.VDIFHeader`, using :class:`~!baseband.vdif._VDIFHeaderRegistry`
 as their metaclass, and including an ``edv`` attribute whose value is not 
 already in use by another class.  For example::
 
@@ -227,6 +227,9 @@ already in use by another class.  For example::
     ...                          HeaderParser(
     ...                              (('nonsense', (6, 0, 32, 0x0)),))
     ... 
+
+This class can then be used like any other::
+
     >>> myheader = vdif.VDIFHeader.fromvalues(
     ...     edv=47, time=header.time,
     ...     samples_per_frame=header.samples_per_frame,
@@ -235,13 +238,31 @@ already in use by another class.  For example::
     ...     thread_id=header['thread_id'], nonsense=2000000000)
     >>> isinstance(myheader, MyVDIFHeader)
     True
-    >>> myheader["nonsense"]
-    2000000000
+    >>> myheader['nonsense'] == 2000000000
+    True
 
-This class can then be used like any other.
+Each EDV class defines a ``_struct`` attribute that refers to a
+:class:`struct.Struct` binary reader and a ``_header_parser`` one that stores
+the bit positions and lengths of header values and produces associated binary 
+readers and writers.  One ``_header_parser`` can be appended to another: for 
+example, ``MyVDIFHeader``, above, combines the parser from 
+:class:`~baseband.vdif.header.VDIFSampleRateHeader` with one that only has
+ "nonsense" in word 6.  Binary readers, parsers and the methods that use them
+are all inherited from the VLBI-Base Header.
+
+.. _cs_vlbi_header:
 
 VLBI-Base Header Module
 -----------------------
+
+The VLBI-Base Header module, in :file:`baseband/vlbi_base/header.py`
+
+:class:`~baseband.vdif.header.VDIFHeader`, alongside all other header classes,
+is a subclass of :class:`vlbi_base.header.VLBIBaseHeader <baseband.vlbi_base.header.VLBIBaseHeader>`.
+When ``VLBIBaseHeader.__init__()`` is called, it creates the ``words`` attribute
+that stores the header in 32-bit integer form.  ``VLBIBaseHeader`` defines the 
+:attribute:``~baseband.vlbi_base.header.VLBIBaseHeader.mutable`` attribute that
+controls whether the header is writeable.
 
 
 
