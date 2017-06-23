@@ -165,31 +165,85 @@ VDIF Header Module
 
 When :class:`~baseband.vdif.VDIFStreamReader` is initialized, it calls classes
 from :mod:`baseband.vdif.header` to read the header, specifically by passing the
-:class:`~baseband.vdif.VDIFFileReader` instance into
+:class:`~baseband.vdif.VDIFFileReader` instance into method
 :meth:`VDIFHeader.fromfile() <baseband.vdif.VDIFHeader.fromfile>`.  We can
 reproduce this behaviour with::
 
+    >>> import baseband.vdif.header as vhdr
     >>> name = io.open(SAMPLE_VDIF, 'rb')
     >>> fhr = vdif.base.VDIFFileReader(name)
-    >>> header = vdif.header.VDIFHeader.fromfile(name)
+    >>> header = vhdr.VDIFHeader.fromfile(name)
     >>> header.ref_epoch  # Number of 6-month periods after Jan 1, 2000.
     28
+
+We can also call :meth:`VDIFHeader.fromvalues() <baseband.vdif.VDIFHeader.fromkeys>`
+to manually define a header::
+
+    >>> # Dereference header info to feed into VDIFHeader.fromkeys
+    >>> header_fromkeys = vdif.VDIFHeader.fromkeys(**header)
+    >>> header_fromkeys == header
+    True
+
+A similar method is :meth:`VDIFHeader.fromvalues() <baseband.vdif.VDIFHeader.fromvalues>`,
+which also takes derived properties like ``bps`` and ``time``.
+(:class:`~baseband.vdif.VDIFFileReader` can be directly initialized with an 
+array of words, but this is not used in practice.)
 
 Perhaps unintuitively, the ``type`` of header is 
 :class:`~baseband.vdif.header.VDIFHeader3`::
 
-    >>> isinstance(header, vdif.header.VDIFHeader3)
+    >>> isinstance(header, vhdr.VDIFHeader3)
     True
 
-Modern VDIF headers are composed of 8 "words", each 4 bytes long.  Words 0 - 3
+Modern VDIF headers are composed of 8 "words", each 32 bits long.  Words 0 - 3
 have fixed meanings, but words 4 - 7 hold optional "extended user data" that
-can be telescope or experiment-specific.  The layout of this data is specified 
-by its "extended-data version" (EDV) in word 4, byte 3, and registered EDV 
+is telescope or experiment-specific.  The layout of this data is specified 
+by its "extended-data version" (EDV) in word 4, bit 24, and registered EDV 
 formats are found on the `VDIF specification site <http://www.vlbi.org/vdif/>`_.
 Baseband pairs each EDV format with its own header class 
 (:class:`~baseband.vdif.header.VDIFHeader3` is for ``EDV = 0x03``, or NRAO data), 
 and currently accommodates EDVs 1 through 4, as well as the 4-word legacy VDIF 
-header and Mark 5B headers transformed into VDIF (``EDV = 0xab``)
+header and Mark 5B headers transformed into VDIF (``EDV = 0xab``).
+:meth:`VDIFHeader.fromfile() <!baseband.vdif.VDIFHeader.fromfile>`, 
+:meth:`VDIFHeader.fromvalues() <!baseband.vdif.VDIFHeader.fromkeys>`, and
+:meth:`VDIFHeader.fromvalues() <!baseband.vdif.VDIFHeader.fromvalues>` are class
+methods that call :meth:`VDIFHeader.__new__() <!baseband.vdif.VDIFHeader.__new__>`,
+which accesses the registry of EDV classes within the metaclass
+:class:`_VDIFHeaderRegistry <!baseband.vdif._VDIFHeaderRegistry>`
+to create the appropriate class instance.
+
+New header classes can be added to the registry by subclassing them from
+:class:`~!baseband.vdif.header.VDIFHeader`, using :class:`~!baseband.vdif._VDIFHeaderRegistry>`
+as their metaclass, and including an ``edv`` attribute whose value is not 
+already in use by another class.  For example::
+
+    >>> from six import with_metaclass  # For Python 2 and 3 compatibilty
+    >>> from baseband.vlbi_base.header import HeaderParser
+    >>> class MyVDIFHeader(with_metaclass(vhdr._VDIFHeaderRegistry, 
+    ...                                   vhdr.VDIFSampleRateHeader)):
+    ...     edv = 47
+    ... 
+    ...     _header_parser = vhdr.VDIFSampleRateHeader._header_parser + \
+    ...                          HeaderParser(
+    ...                              (('nonsense', (6, 0, 32, 0x0)),))
+    ... 
+    >>> myheader = vdif.VDIFHeader.fromvalues(
+    ...     edv=47, time=header.time,
+    ...     samples_per_frame=header.samples_per_frame,
+    ...     station=header.station, bandwidth=header.bandwidth,
+    ...     bps=header.bps, complex_data=header['complex_data'],
+    ...     thread_id=header['thread_id'], nonsense=2000000000)
+    >>> isinstance(myheader, MyVDIFHeader)
+    True
+    >>> myheader["nonsense"]
+    2000000000
+
+This class can then be used like any other.
+
+VLBI-Base Header Module
+-----------------------
+
+
 
 VDIF Writer
 ===========
