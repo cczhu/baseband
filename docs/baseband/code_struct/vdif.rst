@@ -4,60 +4,101 @@ VDIF Reader Code Structure
 
 .. _cs_vdif_intro:
 
-VDIF Reader
-===========
+VDIF Files
+==========
 
-To read in binary mode the sample VDIF file included with baseband, we use the
-``vdif`` class 
+The `VLBI Data Interchange Format (VDIF) <http://www.vlbi.org/vdif/>`_ was
+introduced in 2009 to standardize VLBI data transfer and storage.  Detailed
+specifications are found in VDIF's `specification document
+<http://www.vlbi.org/vdif/docs/VDIF_specification_Release_1.1.1.pdf>`_; here
+we give a brief overview of the VDIF file structure and define commonly-used
+terms.
 
-::
+A VDIF file, sequence of files or data transmission is composed of a sequence
+of data frames, each of which is comprised of a self-identifying data frame
+header followed by a  data array, or "payload".  The header is a pre-defined
+32-bytes long (16-bytes for the "VDIF legacy headers" briefly discussed in the
+:ref:`header section <cs_vdif_intro>`), while the payload is task-specific and
+can range from 32 bytes to ~134 megabytes.
+
+A data frame may carry one or multiple frequency sub-bands (called "channels"
+in the VDIF specification, but deliberately called "sub-bands" here to avoid
+confusion with Fourier channels).  A sequence of data frames all carrying the
+same (set of) sub-band(s) is called a "data thread", denoted by its thread ID.
+A data set consisting of multiple concurrent threads is transmitted or stored
+as a serial sequence of frames called a "data stream".
+
+VDIF headers are designed to be sufficient to permit data analysis without
+appealing to external information.
+
+.. figure:: VDIFHeader.png
+   :scale: 50 %
+
+   Schematic of the standard 32-bit VDIF header.
+   From `VDIF specification release 1.1.1 document, Fig. 3
+   <http://www.vlbi.org/vdif/docs/VDIF_specification_Release_1.1.1.pdf>`_;
+   definitions of terms used can be found on pg. 5 of the document.
+
+Headers are composed of 8 "words", each 32 bits long.  Words 0 - 3
+have fixed meanings, but words 4 - 7 hold optional extended user data that
+is telescope or experiment-specific.  The layout of this data is specified 
+by the "extended-data version", or EDV, in word 4, bit 24 of a VDIF header.
+Registered EDV formats, found on the VDIF website, are all supported by
+Baseband, and the code is written so that new EDVs can be defined by the user.
+
+
+.. _cs_vdif_base:
+
+VDIF Base
+=========
+
+:file:`baseband/vdif/base.py` contains master input/output function
+:func:`vdif.open() <baseband.vdif.open>`.  To read in the sample VDIF file 
+:file:`baseband/data/sample.vdif` (``SAMPLE_VDIF`` in :class:`baseband.data`), then output its
+first 20000 data samples as a numpy array (for ``edv = 3``, this corresponds to 
+all data from the first dataframe set within the file)::
 
 >>> from baseband import vdif
 >>> from baseband.data import SAMPLE_VDIF
 >>> fh = vdif.open(SAMPLE_VDIF, 'rs')
->>> d = fh.read()
+>>> d = fh.read(count=20000)
 
-(``SAMPLE_VDIF`` is simply the ``str`` :file:`baseband/data/sample.vdif`.)
+To write the first dataframe set to a file::
 
-:func:`vdif.open() <baseband.vdif.open>` is the only function or class in the ``vdif`` module 
-directly accessible from :class:`~baseband.vdif` as, in lieu of troubeshooting, 
-it is the only thing users should access.  The functions and classes used by
-:func:`vdif.open() <baseband.vdif.open>` are in
+>>> fw = vdif.open('./dummy_out.vdif', 'ws', nthread=8, header=df.header)
+>>> fw.write(d)
 
-- :file:`baseband/vdif/base.py` - defines :func:`vdif.open() <baseband.vdif.open>`, 
-  stream reader and writer classes
-- :file:`baseband/vdif/frame.py` - contains VDIF data storage container class
-- :file:`baseband/vdif/header.py` - contains VDIF header readers
-- :file:`baseband/vdif/payload.py` - contains VDIF data readers
-- :file:`baseband/vdif/tests/` - defines routines to test :file:`baseband/vdif`
+:func:`vdif.open() <baseband.vdif.open>` is the only function or class in the 
+``vdif`` module directly accessible from :class:`~baseband.vdif` as, in lieu of
+troubeshooting, it is the only thing users should access.  
 
-This code structure is repeated for all other supported file formats, and ought
-to be followed when creating custom file support.
+When called, :func:`vdif.open() <!baseband.vdif.open>` uses :func:`io.open` to
+open the binary file, then passes the `io` object to one of the VDIF base 
+read/write classes.
 
 .. _cs_vdif_base_read:
 
-VDIF Stream Reader Classes
---------------------------
+VDIF Base Reader Classes
+------------------------
 
-:func:`vdif.open() <baseband.vdif.open>` itself calls 
-:class:`~baseband.vdif.base.VDIFFileReader` and 
-:class:`~baseband.vdif.VDIFStreamReader`; the call to it in the
-:ref:`code block <cs_vdif_intro>` at the start of the section is equivalent to::
+We can mimic the reader functionality of :func:`vdif.open() 
+<!baseband.vdif.open>` with the following::
 
     >>> import io
-    >>> name = io.open(SAMPLE_VDIF, 'rb')
-    >>> fhr = vdif.base.VDIFFileReader(name)
+    >>> fio = io.open(SAMPLE_VDIF, 'rb')
+    >>> fhr = vdif.base.VDIFFileReader(fio)
     >>> fh = vdif.base.VDIFStreamReader(fhr)
 
 :class:`~baseband.vdif.base.VDIFFileReader` is a subclass of 
 :class:`io.BufferedReader` that includes the
 :meth:`~baseband.vdif.base.VDIFFileReader.read_frame()`,
-:meth:`~baseband.vdif.base.VDIFFileReader.read_frameset()` and
-:meth:`~baseband.vdif.base.VDIFFileReader.find_header()` methods.  The former
-two simply call :meth:`VDIFFrame.fromdata() <baseband.vdif.frame.VDIFFrame.fromdata>` 
+:meth:`~baseband.vdif.base.VDIFFileReader.read_frameset()` methods, which are
+simply calls to :meth:`VDIFFrame.fromdata() <baseband.vdif.frame.VDIFFrame.fromdata>` 
 and :meth:`VDIFFrameSet.fromdata() <baseband.vdif.frame.VDIFFrameSet.fromdata>`, 
-respectively.  The latter finds the next (or previous, if ``forward=False`` is 
-passed to it) header from the file pointer's current position.
+respectively, that return data frames or frame sets.  :class:`~!baseband.vdif.base.VDIFFileReader`
+also includes :meth:`~baseband.vdif.base.VDIFFileReader.find_header()`, which
+finds the next (or previous, if ``forward=False`` is passed to it) header from
+the file pointer's current position.
 
 :class:`~baseband.vdif.VDIFStreamReader` is not a subclass of 
 :class:`~baseband.vdif.base.VDIFFileReader`, but takes in a :class:`~!baseband.vdif.base.VDIFStreamReader`
@@ -139,10 +180,24 @@ headers.  The ``offset`` data pointer, which also has the ability to
 increment in time units, is inherited from the :mod:`~baseband.vlbi_base` 
 classes.
 
+
+.. _cs_vdif_base_write:
+
+VDIF Base Writer Classes
+------------------------
+
+
+
+.. _cs_vdif_frame:
+
+VDIF Frame
+==========
+
+
 .. _cs_vdif_header:
 
-VDIF Header Module
-------------------
+VDIF Header
+===========
 
 When :class:`~baseband.vdif.VDIFStreamReader` is initialized, it calls classes
 from :mod:`baseband.vdif.header` to read the header, specifically by passing the
@@ -175,15 +230,11 @@ Perhaps unintuitively, the ``type`` of header is
     >>> isinstance(header, vhdr.VDIFHeader3)
     True
 
-Modern VDIF headers are composed of 8 "words", each 32 bits long.  Words 0 - 3
-have fixed meanings, but words 4 - 7 hold optional "extended user data" that
-is telescope or experiment-specific.  The layout of this data is specified 
-by its "extended-data version" (EDV) in word 4, bit 24, and registered EDV 
-formats are found on the `VDIF specification site <http://www.vlbi.org/vdif/>`_.
 Baseband pairs each EDV format with its own header class 
 (:class:`~baseband.vdif.header.VDIFHeader3` is for ``EDV = 0x03``, or NRAO data), 
 and currently accommodates EDVs 1 through 4, as well as the 4-word legacy VDIF 
 header and Mark 5B headers transformed into VDIF (``EDV = 0xab``).
+
 :meth:`VDIFHeader.fromfile() <!baseband.vdif.VDIFHeader.fromfile>`, 
 :meth:`VDIFHeader.fromvalues() <!baseband.vdif.VDIFHeader.fromkeys>`, and
 :meth:`VDIFHeader.fromvalues() <!baseband.vdif.VDIFHeader.fromvalues>` are class
@@ -260,5 +311,7 @@ and 8 32-bit unsigned integers, respectively, to and from their (little-endian)
 binary form.  These are used by VDIF and Mark5B readers.
 
 
-VDIF Writer
+.. _cs_vdif_payload:
+
+VDIF Header
 ===========
