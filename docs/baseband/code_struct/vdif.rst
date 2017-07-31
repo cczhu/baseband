@@ -2,6 +2,38 @@
 VDIF Reader Code Structure
 **************************
 
+.. _cs_vdif_intro:
+
+VDIF Reader
+===========
+
+To read in binary mode the sample VDIF file included with baseband, we use the
+``vdif`` class 
+
+::
+
+>>> from baseband import vdif
+>>> from baseband.data import SAMPLE_VDIF
+>>> fh = vdif.open(SAMPLE_VDIF, 'rs')
+>>> d = fh.read()
+
+(``SAMPLE_VDIF`` is simply the ``str`` :file:`baseband/data/sample.vdif`.)
+
+:func:`vdif.open() <baseband.vdif.open>` is the only function or class in the ``vdif`` module 
+directly accessible from :class:`~baseband.vdif` as, in lieu of troubeshooting, 
+it is the only thing users should access.  The functions and classes used by
+:func:`vdif.open() <baseband.vdif.open>` are in
+
+- :file:`baseband/vdif/base.py` - defines :func:`vdif.open() <baseband.vdif.open>`, 
+  stream reader and writer classes
+- :file:`baseband/vdif/frame.py` - contains VDIF data storage container class
+- :file:`baseband/vdif/header.py` - contains VDIF header readers
+- :file:`baseband/vdif/payload.py` - contains VDIF data readers
+- :file:`baseband/vdif/tests/` - defines routines to test :file:`baseband/vdif`
+
+This code structure is repeated for all other supported file formats, and ought
+to be followed when creating custom file support.
+
 .. _cs_vdif_base_read:
 
 VDIF Stream Reader Classes
@@ -208,8 +240,8 @@ The VLBI-Base Header module, in :file:`baseband/vlbi_base/header.py`
 :class:`~baseband.vdif.header.VDIFHeader`, alongside all other header classes,
 is a subclass of :class:`vlbi_base.header.VLBIBaseHeader <baseband.vlbi_base.header.VLBIBaseHeader>`,
 a class that houses methods and attributes common across all of Baseband's supported
-formats.  :meth:``VLBIBaseHeader.__init__() <!baseband.vlbi_base.header.VLBIBaseHeader.__init__>`` creates the ``words`` attribute
-that stores the header in 32-bit integer form.  :class:``~!baseband.vlbi_base.header.VLBIBaseHeader`` defines ``__getitem__``, ``__setitem__`` and ``keys`` methods to enable dict-like access to header values, and a``mutable`` property that
+formats.  :meth:`VLBIBaseHeader.__init__() <!baseband.vlbi_base.header.VLBIBaseHeader.__init__>` creates the ``words`` attribute
+that stores the header in 32-bit integer form.  :class:`~!baseband.vlbi_base.header.VLBIBaseHeader` defines ``__getitem__``, ``__setitem__`` and ``keys`` methods to enable dict-like access to header values, and a``mutable`` property that
 controls whether the header is writeable.  It also defines the prototypical
 methods :meth:`VLBIBaseHeader.fromfile() <baseband.vlbi_base.VLBIBaseHeader.fromfile>`,
 :meth:`VLBIBaseHeader.fromvalues() <baseband.vlbi_base.VLBIBaseHeader.fromvalues>`,
@@ -222,8 +254,8 @@ inherit its attributes or make calls to its methods using ``super()`` (eg.
 :meth:`VLBIBaseHeader.fromvalues() <!baseband.vlbi_base.VLBIBaseHeader.fromvalues>`).
 
 Also defined in the file are 4-word and 8-word :class:`struct.Struct` binary
-readers :obj:``~baseband.vlbi_base.header.four_word_struct``
-and :obj:``~baseband.vlbi_base.header.eight_word_struct`` that pack and unpack 4 
+readers :obj:`~baseband.vlbi_base.header.four_word_struct`
+and :obj:`~baseband.vlbi_base.header.eight_word_struct` that pack and unpack 4 
 and 8 32-bit unsigned integers, respectively, to and from their (little-endian) 
 binary form.  These are used by VDIF and Mark5B readers.
 
