@@ -16,20 +16,21 @@ terms.
 
 A VDIF file, sequence of files or data transmission is composed of a sequence
 of data frames, each of which is comprised of a self-identifying data frame
-header followed by a  data array, or "payload".  The header is a pre-defined
-32-bytes long, while the payload is task-specific and can range from 32 bytes
-to ~134 megabytes.  Both are little-endian and grouped into 32-bit "words".
-Further details will be discussed in the :ref:`header <cs_vdif_header>` and
-:ref:`payload sections <cs_vdif_payload>` of the document.
+header followed by an array, or "payload", of data covering a single time
+segment of observations from one or more frequency sub-bands.  The header is a
+pre-defined 32-bytes long, while the payload is task-specific and can range from
+32 bytes to ~134 megabytes.  Both are little-endian and grouped into 32-bit
+"words".  Further details will be discussed in the :ref:`header
+<cs_vdif_header>` and :ref:`payload sections <cs_vdif_payload>` of the document.
 
 A data frame may carry one or multiple frequency sub-bands (called "channels"
 in the VDIF specification, but deliberately called "sub-bands" here to avoid
 confusion with Fourier channels).  A sequence of data frames all carrying the
 same (set of) sub-band(s) is called a "data thread", denoted by its thread ID.
 A data set consisting of multiple concurrent threads is transmitted or stored
-as a serial sequence of frames called a "data stream".  Strict time ordering,
-while part of VDIF best practices, is not mandated, and cannot be guaranteed
-during data transmission over the internet.
+as a serial sequence of frames called a "data stream".  Strict time ordering
+of frames in the stream, while part of VDIF best practices, is not mandated,
+and cannot be guaranteed during data transmission over the internet.
 
 
 .. _cs_vdif_base:
@@ -40,15 +41,17 @@ VDIF Base
 :file:`baseband/vdif/base.py` contains master input/output function
 :func:`vdif.open() <baseband.vdif.open>`.  To read in the sample VDIF file 
 :file:`baseband/data/sample.vdif` (``SAMPLE_VDIF`` in :class:`baseband.data`),
-then output its first 20000 data samples as a numpy array (for ``edv = 3``, 
-this corresponds to all data from the first dataframe set within the file)::
+then output its first 20000 data samples as a numpy array::
 
     >>> from baseband import vdif
     >>> from baseband.data import SAMPLE_VDIF
     >>> fh = vdif.open(SAMPLE_VDIF, 'rs')
     >>> d = fh.read(count=20000)
 
-To write the first dataframe set to a file::
+For this file, ``count=20000`` corresponds to all data from its first
+dataframe set.  We define a dataframe set (or just "frame set") as the
+collection of frames that cover all threads for a single time segment.
+To write this set to a file::
 
     >>> fw = vdif.open('./dummy_out.vdif', 'ws', nthread=8, header=fh.header0)
     >>> fw.write(d)
@@ -67,7 +70,7 @@ VDIF Base Reader Classes
 ------------------------
 
 We can mimic the reader functionality of :func:`vdif.open() 
-<!baseband.vdif.open>` with the following::
+<!baseband.vdif.open>` showcased above with the following::
 
     >>> import io
     >>> fio = io.open(SAMPLE_VDIF, 'rb')
@@ -80,7 +83,7 @@ We can mimic the reader functionality of :func:`vdif.open()
 :meth:`~baseband.vdif.base.VDIFFileReader.read_frameset()` methods, which are
 simply calls to :meth:`VDIFFrame.fromdata() <baseband.vdif.frame.VDIFFrame.fromdata>` 
 and :meth:`VDIFFrameSet.fromdata() <baseband.vdif.frame.VDIFFrameSet.fromdata>`, 
-respectively, that return data frames or frame sets.  
+respectively, that return data frames or frame sets.
 :class:`~!baseband.vdif.base.VDIFFileReader` also includes 
 :meth:`~baseband.vdif.base.VDIFFileReader.find_header()`, which
 finds the next (or previous, if ``forward=False`` is passed to it) header from
@@ -91,109 +94,93 @@ the file pointer's current position.
 :class:`vlbi_base.base.VLBIStreamReaderBase <baseband.vlbi_base.base.VLBIStreamReaderBase>`,
 translates files into data streams.  Its constructor takes in a
 :class:`~!baseband.vdif.base.VDIFFileReader` instance, and during
-initialization uses it to read the file header and find the number of threads
-(done by reading the first frameset using :meth:`VDIFFileReader.read_frameset()
-<baseband.vdif.base.VDIFFileReader.read_frameset>` and counting the number of
-frames found).  It inherits from :class:`~!baseband.vlbi_base.base.VLBIStreamReaderBase`
-a file pointer that advances in counts rather than bytes.  This pointer is
-accessible using::
+initialization uses :meth:`VDIFFileReader.read_frameset()
+<!baseband.vdif.base.VDIFFileReader.read_frameset>` to read the file's first
+frame set, obtaining the first frame header and the number of threads in the
+stream in the process.  The frame set is stored in the ``_frameset``
+class attribute.
+
+:class:`~!baseband.vdif.VDIFStreamReader` inherits from 
+:class:`~!baseband.vlbi_base.base.VLBIStreamReaderBase`
+a file pointer that advances in data samples rather than bytes.  This pointer
+is accessible using::
 
     >>> fh.offset
     0
-    >>> fh.seek(0, 2)  # Position in units of counts
+    >>> fh.seek(0, 2)  # Position in units of samples.
     40000
 
 It is further discussed in the :ref:`VLBI-Base section <cs_vlbi_base_read>`.
 
 The payload can be read by calling :meth:`VDIFStreamReader.read()
-<baseband.vdif.base.VDIFStreamReader.read>`, which uses the count-based pointer
-to return a :class:`numpy.ndarray` with a user-defined number of counts::
+<baseband.vdif.base.VDIFStreamReader.read>`, which uses the sample-based
+pointer to return a :class:`numpy.ndarray` with a user-defined number of
+samples::
 
-    >>> fh.seek(0)          # Return file pointer to start
+    >>> fh.seek(0)          # Return file pointer to start.
     0
-    >>> data = fh.read(10)  # Ask for 10 counts of data
+    >>> data = fh.read(10)  # Return 10 samples of data in array.
     >>> data.shape
     (10, 8)
 
 Here, ``8`` is the number of threads in the stream.
 
-The count-based pointer is not tied to the binary file pointer from the
+The sample-based pointer is not tied to the binary file pointer from the
 :class:`~!baseband.vdif.base.VDIFFileReader` instance.  For example::
 
-    >>> fh.seek(0)             # fh's count-based pointer
-    0
-    >>> fh.fh_raw.seek(0, 2)   # Binary pointer from fhr
+    >>> # Set sample-based pointer to halfway into the first frame
+    >>> # (output is position in sample counts)
+    >>> fh.seek(fh.samples_per_frame // 2)
+    10000
+    >>> fh.fh_raw.seek(0, 2)   # Binary pointer from fhr.
     80512
-    >>> fh.tell()              # Equivalent to fh.offset
-    0
+    >>> fh.tell()              # Equivalent to fh.offset.
+    10000
     >>> fh.fh_raw.tell()
     80512
 
-:meth:`~baseband.vdif.VDIFStreamReader.read` calls private method
-:meth:`~baseband.vdif.VDIFStreamReader._read_frame_set`, which in turn
-calls :meth:`VDIFFileReader.read_frameset() <!baseband.vdif.base.VDIFFileReader.read_frameset>`
-to read framesets.  For the trivial case above of reading an entire file, we 
-can manually replicate :meth:`~!baseband.vdif.base.VDIFStreamReader.read`'s 
-behaviour with::
+:meth:`~!baseband.vdif.base.VDIFStreamReader.read` advances the sample-based
+pointer forward when reading data, converting it to a time to check whether
+that time falls within the time segment of the currently stored frame set
+(in ``_frameset``).  If not, a new frame set is read in using private method
+:meth:`~baseband.vdif.VDIFStreamReader._read_frame_set`, which shifts the
+binary file pointer to match the sample-based one, then uses
+:meth:`VDIFFileReader.read_frameset() <!baseband.vdif.base.VDIFFileReader.read_frameset>`
+to read in a new frameset.  This check is made each time the sample-based
+pointer is advanced, and so :meth:`~!baseband.vdif.base.VDIFStreamReader.read`
+is able to read subsections of data that span multiple frame sets and start
+and end in the middle of sets.
+
+To showcase the methodology of :meth:`~!baseband.vdif.base.VDIFStreamReader.read`,
+we replicate its behavior for the simple case above of reading an entire file,
+by obtaining the number of frames and threads in the file and then
+using :meth:`VDIFFileReader.read_frameset() 
+<!baseband.vdif.base.VDIFFileReader.read_frameset>`.::
 
     >>> import numpy as np
-    >>> # Read in file.
-    >>> name = io.open(SAMPLE_VDIF, 'rb')
-    >>> fb = vdif.base.VDIFFileReader(name)
-    >>> # Determine file length in bytes.
-    >>> fb_bytesize = fb.seek(0, 2)
-    >>> fb.seek(0)
+    >>> fb_bytesize = fh.fh_raw.seek(0, 2)
+    >>> fh.fh_raw.seek(0)
     0
-    >>> # Determine number of threads in frameset and number of framesets in file.  
-    >>> # Functionally identical to thread finder in VDIFStreamReader.__init__().
-    >>> first_frameset = fb.read_frameset(None)
-    >>> thread_ids = [fr['thread_id'] for fr in first_frameset.frames]
-    >>> nthread = len(thread_ids)
-    >>> nframe = fb_bytesize // fb.tell()
-    >>> # Get number of samples per frameset.
+    >>> # Determine number number of frame sets in file and
+    >>> # number of samples per frame set.
+    >>> first_frameset = fh.fh_raw.read_frameset()
+    >>> nframe = fb_bytesize // fh.fh_raw.tell()
+    >>> nthread = first_frameset.data.shape[0]
     >>> samp_per_fset = first_frameset.header0.samples_per_frame
-    >>> # Define output ndarray (number of Fourier channels nchan = 1).
+    >>> # Define output ndarray.  Number of Fourier channels = 1.
     >>> out = np.empty((nthread, samp_per_fset*nframe, 1), \
     ...                 dtype=first_frameset.dtype).transpose(1, 0, 2)
-    >>> # Simpler version of the "while count > 0:" loop in VDIFStreamReader.read().
-    >>> fb.seek(0)
-    0
-    >>> for i in range(nframe):
-    ...     cframe = fb.read_frameset(thread_ids)
+    >>> # Simplified version of the "while count > 0:" loop in VDIFStreamReader.read().
+    >>> out[:samp_per_fset] = first_frameset.data.transpose(1, 0, 2)
+    >>> for i in range(1, nframe):
+    ...     cframe = fh.fh_raw.read_frameset()
     ...     out[i*samp_per_fset:(i + 1)*samp_per_fset] = \
     ...            cframe.data.transpose(1, 0, 2)
     >>> # Check that output is the same as fh.read() from above.
-    >>> np.array_equal(out.squeeze(), data)
+    >>> fh.seek(0)
+    0
+    >>> np.array_equal(out.squeeze(), fh.read())
     True
-
-:class:`~baseband.vdif.base.VDIFFileReader`, however, has an ``offset`` data 
-pointer that increments in units of samples. (As discussed below, it works 
-directly on the data stream, and is **not** a file pointer!  The original byte
-pointer is available through ``VDIFStreamReader.fh_raw`` and functions 
-indepently from ``offset``.)  It controls where 
-:meth:`~!baseband.vdif.base.VDIFStreamReader.read` starts reading data, and can 
-be used to read subsections of the data even if we start and end in the middle
-of framesets::
-
-    >>> # Set offset pointer to halfway into the first frame
-    >>> fh.seek(fh.samples_per_frame // 2)
-    10000
-    >>> data_m = fh.read(fh.samples_per_frame)  # Read 1 frame worth of samples
-    >>> data_m.shape
-    (20000, 8)
-    >>> # Check that first sample read is from middle of first frameset
-    >>> np.array_equal(data_m[0], data[fh.samples_per_frame // 2])
-    True
-
-:class:`~baseband.vdif.VDIFStreamReader` is a subclass of
-:class:`~baseband.vdif.base.VDIFStreamBase` and 
-:class:`~baseband.vlbi_base.base.VLBIStreamReaderBase`.
-:class:`~baseband.vdif.base.VDIFStreamBase` is subclassed from
-:class:`~baseband.vlbi_base.base.VLBIStreamBase`, and only appends private
-methods for printing class information to screen and calculating times for 
-headers.  The ``offset`` data pointer, which also has the ability to
-increment in time units, is inherited from the :mod:`~baseband.vlbi_base` 
-classes.
 
 
 .. _cs_vdif_base_write:
@@ -201,6 +188,130 @@ classes.
 VDIF Base Writer Classes
 ------------------------
 
+As with :class:`~baseband.vdif.base.VDIFFileReader`,
+:class:`~baseband.vdif.base.VDIFFileWriter` simply calls methods from
+:module:`baseband.vdif.frame` - specifically, :meth:`VDIFFileWriter.write_frame()
+<baseband.vdif.base.VDIFFileWriter.write_frame>` calls :meth:`VDIFFrame.todata()
+<baseband.vdif.frame.VDIFFrame.todata>` and :meth:`VDIFFileWriter.write_frameset()
+<baseband.vdif.base.VDIFFileWriter.write_frameset>` calls :meth:`VDIFFrameSet.todata()
+<baseband.vdif.frame.VDIFFrameSet.todata>`.  For example, to write out the
+frame set stored in ``fh``::
+
+    >>> fwio = io.open('./dummy_out.vdif', 'wb')
+    >>> # This is identical to VDIFFileWriter.write_frameset(fh._frameset)
+    >>> fh._frameset.tofile(fwio)
+    >>> fwio.close()
+    >>> # Re-open saved file to check if it's identical to the frame set
+    >>> fh_saved = vdif.open('./dummy_out.vdif', 'rs')
+    >>> np.array_equal(fh._frameset.data.transpose(1, 0, 2).squeeze(), 
+    ...                fh_saved.read())
+    True
+
+:class:`~baseband.vdif.VDIFStreamWriter`, a subclass of 
+:class:`~baseband.vdif.base.VDIFStreamBase` and
+:class:`vlbi_base.base.VLBIStreamWriterBase <baseband.vlbi_base.base.VLBIStreamWriterBase>`,
+writes :class:`numpy.ndarray` data to a user-defined data stream, then writes
+that stream to file.  The class initializer takes a
+:class:`~!baseband.vdif.base.VDIFFileWriter` object and, to partition the
+data stream into frame sets, the number of threads ``nthread`` and either
+the first header of the data stream, or the set of values needed to construct
+the first header from scratch.  This information is used to determine the
+number of samples per frame (and frame set), and time segment of each frame.
+To write to file, :meth:`VDIFStreamWriter.write() <baseband.vdif.base.VDIFStreamWriter.write>`
+advances the sample counter in steps of samples-per-frame; at each step, it
+generates an appropriately time-shifted header and writes it and the
+corresponding data block to file using :meth:`VDIFFileWriter.write_frameset()
+<!baseband.vdif.base.VDIFFileWriter.write_frameset>`.  Proper assignment of
+thread numbers is done within :meth:`VDIFFileWriter.write_frameset()
+<!baseband.vdif.base.VDIFFileWriter.write_frameset>`.
+
+To show how :meth:`VDIFStreamWriter.write() <!baseband.vdif.base.VDIFStreamWriter.write>` 
+works, we replicate its behavior for the simple case of writing all data to a
+file using :meth:`VDIFFileWriter.write_frameset() 
+<!baseband.vdif.base.VDIFFileReader.read_frameset>`::
+
+# Read in data to be output to file.
+fh = vdif.open(SAMPLE_VDIF, 'rs')
+data = fh.read()
+
+# Open output file.
+fwio = io.open('./dummy_out.vdif', 'wb')
+fwr = vdif.base.VDIFFileWriter(fwio)
+
+# Initialize data frame payload storage (with VDIFStreamWriter, stored in
+# ._data) with 8 threads, 1 channel
+nsample = fh.samples_per_frame
+payload = np.zeros((fh.nthread, nsample, fh.nchan),
+                   np.float32)
+
+# Obtain count (# of samples to write to file), and set sample and
+# frame number to 0
+count = data.shape[0]
+sample = 0
+frame_nr = 0
+# frame is a transposed view of payload.
+frame = payload.transpose(1, 0, 2)
+while count > 0:
+    # Generate a header with the new time and frame number.
+    c_header = fh.header0.copy()
+    c_header['seconds'] = fh.header0['seconds'] + \
+                          frame_nr // fh.frames_per_second
+    c_header['frame_nr'] = frame_nr
+
+    # Write frame to file.
+    frame = data[sample:sample + nsample]
+    fwr.write_frameset(payload, c_header)
+
+    sample += nsample
+    count -= nsample
+    frame_nr += 1
+
+fwr.close()
+
+# Check that we made a successful write (fh.header0 won't equal fh_w.header0
+# because SAMPLE_VDIF's threads are not in order
+fh_w = vdif.open('./dummy_out.vdif', 'rs')
+np.array_equal(data, fh_w.read())
+
+
+
+
+
+The above takes advantage of the fact we write complete data frames 
+:meth:`VDIFStreamWriter.write() <!baseband.vdif.base.VDIFStreamWriter.write>`
+
+:class:`~!baseband.vdif.base.VDIFFileWriter`, and consequently
+:class:`~baseband.vdif.VDIFStreamWriter`, cannot write to a sequence of files.
+
+
+fwr.close()
+
+
+
+    >>> import numpy as np
+    >>> fb_bytesize = fh.fh_raw.seek(0, 2)
+    >>> fh.fh_raw.seek(0)
+    0
+    >>> # Determine number number of frame sets in file and
+    >>> # number of samples per frame set.
+    >>> first_frameset = fh.fh_raw.read_frameset()
+    >>> nframe = fb_bytesize // fh.fh_raw.tell()
+    >>> nthread = first_frameset.data.shape[0]
+    >>> samp_per_fset = first_frameset.header0.samples_per_frame
+    >>> # Define output ndarray.
+    >>> out = np.empty((nthread, samp_per_fset*nframe, 1), \
+    ...                 dtype=first_frameset.dtype).transpose(1, 0, 2)
+    >>> # Simplified version of the "while count > 0:" loop in VDIFStreamReader.read().
+    >>> out[:samp_per_fset] = first_frameset.data.transpose(1, 0, 2)
+    >>> for i in range(1, nframe):
+    ...     cframe = fh.fh_raw.read_frameset()
+    ...     out[i*samp_per_fset:(i + 1)*samp_per_fset] = \
+    ...            cframe.data.transpose(1, 0, 2)
+    >>> # Check that output is the same as fh.read() from above.
+    >>> fh.seek(0)
+    0
+    >>> np.array_equal(out.squeeze(), fh.read())
+    True
 
 
 .. _cs_vdif_frame:
@@ -241,7 +352,7 @@ Detailed definitions of terms are found on pg. 5 - 7 of the VDIF specification.
 
 Words 4 - 7 hold optional extended user data that is telescope or experiment-
 specific.  The layout of this data is specified by the "extended-data version",
-or EDV, in word 4, bit 24 of a VDIF header.  Registered EDV formats, found on
+or EDV, in word 4, bit 24 of the header.  Registered EDV formats, found on
 the VDIF website, are all supported by Baseband, and the code is written so that
 new EDVs can be defined by the user.
 
@@ -251,9 +362,11 @@ from :mod:`baseband.vdif.header` to read the header, specifically by passing the
 :meth:`VDIFHeader.fromfile() <baseband.vdif.VDIFHeader.fromfile>`.  We can
 reproduce this behaviour with::
 
-    >>> import baseband.vdif.header as vhdr
-    >>> name = io.open(SAMPLE_VDIF, 'rb')
-    >>> header = vhdr.VDIFHeader.fromfile(name)
+    >>> import io
+    >>> import baseband.vdif as vdif
+    >>> fio = io.open(SAMPLE_VDIF, 'rb')
+    >>> fhr = vdif.base.VDIFFileReader(fio)
+    >>> header = vdif.header.VDIFHeader.fromfile(fhr)
     >>> header.ref_epoch  # Number of 6-month periods after Jan 1, 2000.
     28
 
@@ -261,7 +374,7 @@ We can also call :meth:`VDIFHeader.fromvalues() <baseband.vdif.VDIFHeader.fromke
 to manually define a header::
 
     >>> # Dereference header info to feed into VDIFHeader.fromkeys
-    >>> header_fromkeys = vdif.VDIFHeader.fromkeys(**header)
+    >>> header_fromkeys = vdif.header.VDIFHeader.fromkeys(**header)
     >>> header_fromkeys == header
     True
 
@@ -273,7 +386,7 @@ array of words, but this is not used in practice.)
 Perhaps unintuitively, the ``type`` of header is 
 :class:`~baseband.vdif.header.VDIFHeader3`::
 
-    >>> isinstance(header, vhdr.VDIFHeader3)
+    >>> isinstance(header, vdif.header.VDIFHeader3)
     True
 
 Baseband pairs each EDV format with its own header class 
@@ -294,20 +407,17 @@ New header classes can be added to the registry by subclassing them from
 as their metaclass, and including an ``edv`` attribute whose value is not 
 already in use by another class.  For example::
 
-    >>> from six import with_metaclass  # For Python 2 and 3 compatibilty
-    >>> from baseband.vlbi_base.header import HeaderParser
-    >>> class MyVDIFHeader(with_metaclass(vhdr._VDIFHeaderRegistry, 
-    ...                                   vhdr.VDIFSampleRateHeader)):
-    ...     edv = 47
-    ... 
-    ...     _header_parser = vhdr.VDIFSampleRateHeader._header_parser + \
-    ...                          HeaderParser(
-    ...                              (('nonsense', (6, 0, 32, 0x0)),))
-    ... 
+    >>> from baseband import vlbi_base
+    >>> class MyVDIFHeader(vdif.header.VDIFSampleRateHeader):
+    ...     _edv = 47
+    ...
+    ...     _header_parser = vdif.header.VDIFSampleRateHeader._header_parser +\
+    ...         vlbi_base.header.HeaderParser(
+    ...                             (('nonsense', (6, 0, 32, 0x0)),))
 
 This class can then be used like any other::
 
-    >>> myheader = vdif.VDIFHeader.fromvalues(
+    >>> myheader = vdif.header.VDIFHeader.fromvalues(
     ...     edv=47, time=header.time,
     ...     samples_per_frame=header.samples_per_frame,
     ...     station=header.station, bandwidth=header.bandwidth,
@@ -326,35 +436,6 @@ example, ``MyVDIFHeader``, above, combines the parser from
 :class:`~baseband.vdif.header.VDIFSampleRateHeader` with one that only has
 "nonsense" in word 6.  Binary readers, parsers and the methods that use them
 are all inherited from the VLBI-Base Header.
-
-.. _cs_vlbi_header:
-
-VLBI-Base Header Module
------------------------
-
-The VLBI-Base Header module, in :file:`baseband/vlbi_base/header.py`
-
-:class:`~baseband.vdif.header.VDIFHeader`, alongside all other header classes,
-is a subclass of :class:`vlbi_base.header.VLBIBaseHeader <baseband.vlbi_base.header.VLBIBaseHeader>`,
-a class that houses methods and attributes common across all of Baseband's supported
-formats.  :meth:`VLBIBaseHeader.__init__() <!baseband.vlbi_base.header.VLBIBaseHeader.__init__>` creates the ``words`` attribute
-that stores the header in 32-bit integer form.  :class:`~!baseband.vlbi_base.header.VLBIBaseHeader` defines ``__getitem__``, ``__setitem__`` and ``keys`` methods to enable dict-like access to header values, and a``mutable`` property that
-controls whether the header is writeable.  It also defines the prototypical
-methods :meth:`VLBIBaseHeader.fromfile() <baseband.vlbi_base.VLBIBaseHeader.fromfile>`,
-:meth:`VLBIBaseHeader.fromvalues() <baseband.vlbi_base.VLBIBaseHeader.fromvalues>`,
-and :meth:`VLBIBaseHeader.fromkeys() <baseband.vlbi_base.VLBIBaseHeader.fromkeys>`.
-:class:`~!baseband.vdif.header.VDIFHeader` is not directly used in practice, since
-it **DOES NOT DEFINE** the ``_struct`` and ``_header_parser`` attributes needed by its
-methods. Instead, derived classes like :class:`~!baseband.vdif.header.VDIFHeader`
-inherit its attributes or make calls to its methods using ``super()`` (eg.
-:meth:`VDIFHeader.fromvalues() <!baseband.vdif.VDIFHeader.fromvalues>` calls
-:meth:`VLBIBaseHeader.fromvalues() <!baseband.vlbi_base.VLBIBaseHeader.fromvalues>`).
-
-Also defined in the file are 4-word and 8-word :class:`struct.Struct` binary
-readers :obj:`~baseband.vlbi_base.header.four_word_struct`
-and :obj:`~baseband.vlbi_base.header.eight_word_struct` that pack and unpack 4 
-and 8 32-bit unsigned integers, respectively, to and from their (little-endian) 
-binary form.  These are used by VDIF and Mark5B readers.
 
 
 .. _cs_vdif_payload:
