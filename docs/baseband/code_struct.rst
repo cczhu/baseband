@@ -56,6 +56,7 @@ Specific File Formats
    :maxdepth: 1
 
    code_struct/vdif
+   code_struct/vlbi_base
 
 
 Sequential File Reader
