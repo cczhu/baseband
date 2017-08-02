@@ -43,15 +43,15 @@ VDIF Base
 then output its first 20000 data samples as a numpy array (for ``edv = 3``, 
 this corresponds to all data from the first dataframe set within the file)::
 
->>> from baseband import vdif
->>> from baseband.data import SAMPLE_VDIF
->>> fh = vdif.open(SAMPLE_VDIF, 'rs')
->>> d = fh.read(count=20000)
+    >>> from baseband import vdif
+    >>> from baseband.data import SAMPLE_VDIF
+    >>> fh = vdif.open(SAMPLE_VDIF, 'rs')
+    >>> d = fh.read(count=20000)
 
 To write the first dataframe set to a file::
 
->>> fw = vdif.open('./dummy_out.vdif', 'ws', nthread=8, header=df.header)
->>> fw.write(d)
+    >>> fw = vdif.open('./dummy_out.vdif', 'ws', nthread=8, header=fh.header0)
+    >>> fw.write(d)
 
 :func:`vdif.open() <baseband.vdif.open>` is the only function or class in the 
 ``vdif`` module directly accessible from :class:`~baseband.vdif` as, in lieu of
@@ -89,28 +89,45 @@ the file pointer's current position.
 :class:`~baseband.vdif.VDIFStreamReader`, a subclass of 
 :class:`~baseband.vdif.base.VDIFStreamBase` and
 :class:`vlbi_base.base.VLBIStreamReaderBase <baseband.vlbi_base.base.VLBIStreamReaderBase>`,
-translates files into data streams.  Its constructor takes in a 
-:class:`~!baseband.vdif.base.VDIFFileReader` object, and during initialization
-uses it to read the file header and find the number of threads (done by
-reading the first frameset using :meth:`VDIFFileReader.read_frameset()
+translates files into data streams.  Its constructor takes in a
+:class:`~!baseband.vdif.base.VDIFFileReader` instance, and during
+initialization uses it to read the file header and find the number of threads
+(done by reading the first frameset using :meth:`VDIFFileReader.read_frameset()
 <baseband.vdif.base.VDIFFileReader.read_frameset>` and counting the number of
 frames found).  It inherits from :class:`~!baseband.vlbi_base.base.VLBIStreamReaderBase`
-a file pointer that advances in counts rather than bytes.  This pointer, stored
-as the ``offset`` attribute, is further discussed in the :ref:`VLBI-Base section
-<cs_vlbi_base_read>`_.
+a file pointer that advances in counts rather than bytes.  This pointer is
+accessible using::
+
+    >>> fh.offset
+    0
+    >>> fh.seek(0, 2)  # Position in units of counts
+    40000
+
+It is further discussed in the :ref:`VLBI-Base section <cs_vlbi_base_read>`.
 
 The payload can be read by calling :meth:`VDIFStreamReader.read()
 <baseband.vdif.base.VDIFStreamReader.read>`, which uses the count-based pointer
 to return a :class:`numpy.ndarray` with a user-defined number of counts::
 
-    >>> # Asking for 10 counts of data
-    >>> data = fh.read(10)
+    >>> fh.seek(0)          # Return file pointer to start
+    0
+    >>> data = fh.read(10)  # Ask for 10 counts of data
     >>> data.shape
-    (40000, 8)
+    (10, 8)
 
 Here, ``8`` is the number of threads in the stream.
 
-The count-based pointer 
+The count-based pointer is not tied to the binary file pointer from the
+:class:`~!baseband.vdif.base.VDIFFileReader` instance.  For example::
+
+    >>> fh.seek(0)             # fh's count-based pointer
+    0
+    >>> fh.fh_raw.seek(0, 2)   # Binary pointer from fhr
+    80512
+    >>> fh.tell()              # Equivalent to fh.offset
+    0
+    >>> fh.fh_raw.tell()
+    80512
 
 :meth:`~baseband.vdif.VDIFStreamReader.read` calls private method
 :meth:`~baseband.vdif.VDIFStreamReader._read_frame_set`, which in turn
