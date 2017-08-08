@@ -4,16 +4,24 @@ VLBI Base I/O Code Structure
 
 Code that is wi
 
-.. _cs_vlbi_base_read:
+.. _cs_vlbi_base:
 
-VLBI Base Reader Classes
-------------------------
+VLBI-Base Base
+==============
+
+
+.. _cs_vlbi_frame:
+
+VLBI-Base Frame
+===============
+
+VDIFHeaderBase is not an abstract base class because not all of its attributes and methods are used (for example Dada doesn't use _struct), so it is unreasonable to expect subclasses to follow the same template.
 
 
 .. _cs_vlbi_header:
 
-VLBI-Base Header Module
------------------------
+VLBI-Base Header
+================
 
 The VLBI-Base Header module, in :file:`baseband/vlbi_base/header.py`
 
@@ -39,3 +47,8 @@ and :obj:`~baseband.vlbi_base.header.eight_word_struct` that pack and unpack 4
 and 8 32-bit unsigned integers, respectively, to and from their (little-endian) 
 binary form.  These are used by VDIF and Mark5B readers.
 
+
+.. _cs_vlbi_payload:
+
+VLBI-Base Payload
+=================
