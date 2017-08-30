@@ -696,6 +696,8 @@ these, either a sample header or the number of sub-bands, bits per sample,
 and whether the samples are complex::
 
     >>> import baseband.vdif as vdif
+    >>> import numpy as np
+    >>> import io
     >>> from baseband.data import SAMPLE_VDIF
     >>> fhr = vdif.base.VDIFFileReader(io.open(SAMPLE_VDIF, 'rb'))
     >>> # Extract payload words from sample VDIF
@@ -704,13 +706,54 @@ and whether the samples are complex::
     >>>
     >>> # Create new payload with 1 sub-band and 2 bits per sample
     >>> payload = vdif.payload.VDIFPayload(words, nchan=1, bps=2)
-    >>> np.array_equal(payload.data, frame.payload.data)
+    >>> payload == frame.payload
     True
 
-Payload samples can be accessed through the ``data`` property, as well as
+In practice, the class methods :meth:`VDIFPayload.fromfile()
+<baseband.vdif.payload.VDIFPayload.fromfile>` and :meth:`VDIFPayload.fromdata()
+<baseband.vdif.payload.VDIFPayload.fromdata>` are used instead, since we
+rarely instantiate payloads directly from 32-bit words::
 
+    >>> fhr.fh_raw.seek(0)
+    0
+    >>> header = vdif.header.VDIFHeader.fromfile(fhr.fh_raw)
+    >>> payload = vdif.payload.VDIFPayload.fromfile(fhr.fh_raw, header)
+    >>> payload_fromdata = vdif.payload.VDIFPayload.fromdata(
+    ...                                         payload.data, bps=2, edv=3)
+    >>> payload == payload_fromdata
+    True
 
-In practice, the class methods :class:`VDIFPayload.fromfile()
-<baseband.vdif.payload.VDIFPayload.fromfile>` and :class:`VDIFPayload.fromdata()
-<baseband.vdif.payload.VDIFPayload.fromdata>` are used instead, producing
-payload instances from files and 
+Reading from file requires we include the header as an argument, while
+reading from data needs either the header or manual specification of the bits
+per sample and EDV.
+
+Payload samples can be accessed through the read-only ``data`` property, as
+well as directly via list-like indexing and slicing::
+
+    >>> payload.data[0]
+    array([ 1.], dtype=float32)
+    >>> payload[10:12]
+    array([[ 3.33590007],
+           [-1.        ]], dtype=float32)
+
+This functionality is inherited from :class:`baseband.vlbi_base.payload.VLBIPayloadBase>`,
+with ``data`` using ``VLBIPayloadBase.__getitem__`` as its getter.
+
+Meanwhile, data is stored in memory as a :class:`numpy.ndarray` of int32
+words, rather than individual samples.  Consequently, each time data is
+accessed for reading or writing it must be converted, which is the role
+of the ``_encoders`` and ``_decoders`` objects stored within
+:class:`~baseband.vdif.payload.VDIFPayload`.  (:class:`baseband.vlbi_base.payload.VLBIPayloadBase>`
+also features these attributes, but there they are deliberately left blank
+since these are sample size specific.)  Each is a dictionary of functions
+that convert words to samples, indexed by the number of bits per sample.
+
+Additionally, :class:`~baseband.vdif.payload.VDIFPayload` inherits
+a number of properties from :class:`baseband.vlbi_base.payload.VLBIPayloadBase>`,
+including ``size``, ``shape``, ``nsample`` and ``sample_shape`` that record
+the dimensions of the payload, and ``dtype``, which in practice returns
+whether or not the data is complex.  It also inherits special methods for
+determining the equality of two payloads, which we utilized above, and is also
+used by :class:`~baseband.vdif.frame.VDIFFrame` to determine if two frames are
+identical.
+
