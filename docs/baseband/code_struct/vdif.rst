@@ -746,7 +746,15 @@ of the ``_encoders`` and ``_decoders`` objects stored within
 :class:`~baseband.vdif.payload.VDIFPayload`.  (:class:`baseband.vlbi_base.payload.VLBIPayloadBase>`
 also features these attributes, but there they are deliberately left blank
 since these are sample size specific.)  Each is a dictionary of functions
-that convert words to samples, indexed by the number of bits per sample.
+that converts words to samples (or vice versa), indexed by the number of bits
+per sample.  For example, ``_decoders[2]`` converts words into 2-bit samples.
+The functions themselves are mostly defined in :mod:`baseband.vdif.payload`, and
+include :func:`~baseband.vdif.payload.decode_2bit` and
+:func:`~baseband.vdif.payload.decode_4bit`.  A few, such as 
+:func:`~baseband.vlbi_base.payload.encode_8bit`, are imported from
+:mod:`baseband.vdif.payload`, while others, such as 
+:func:`~baseband.vlbi_base.payload.encode_2bit_base`, are used by other encode
+and decode functions.
 
 Additionally, :class:`~baseband.vdif.payload.VDIFPayload` inherits
 a number of properties from :class:`baseband.vlbi_base.payload.VLBIPayloadBase>`,
