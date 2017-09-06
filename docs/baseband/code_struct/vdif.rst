@@ -747,7 +747,7 @@ of the ``_encoders`` and ``_decoders`` objects stored within
 also features these attributes, but there they are deliberately left blank
 since these are sample size specific.)  Each is a dictionary of functions
 that converts words to samples (or vice versa), indexed by the number of bits
-per sample.  For example, ``_decoders[2]`` converts words into 2-bit samples.
+per sample.  For example, ``_decoders[2] == decode_2bit`` converts words into 2-bit samples.
 The functions themselves are mostly defined in :mod:`baseband.vdif.payload`, and
 include :func:`~baseband.vdif.payload.decode_2bit` and
 :func:`~baseband.vdif.payload.decode_4bit`.  A few, such as 
@@ -755,6 +755,15 @@ include :func:`~baseband.vdif.payload.decode_2bit` and
 :mod:`baseband.vdif.payload`, while others, such as 
 :func:`~baseband.vlbi_base.payload.encode_2bit_base`, are used by other encode
 and decode functions.
+
+When a payload is read into memory, its bits per sample is determined from the
+header.  When the user accesses the payload data, the payload uses the BPS
+as an index to ``_decoders``; i.e. when BPS = 2, ``decode_2bit`` is returned.
+We can manually call it to decode the first word of our payload::
+
+    >>> first_word = vdif.payload.decode_2bit(payload.words[:1]).ravel()
+    >>> (first_word == payload.data[:16].ravel()).all()
+    True
 
 Additionally, :class:`~baseband.vdif.payload.VDIFPayload` inherits
 a number of properties from :class:`baseband.vlbi_base.payload.VLBIPayloadBase>`,
