@@ -4,10 +4,11 @@
 Getting Started
 ***************
 
-This tutorial covers the basic features of Baseband.  It assumes that Numpy
-has been imported::
+This tutorial covers the basic features of Baseband.  It assumes that Numpy and
+the Astropy Units module have been imported::
 
     >>> import numpy as np
+    >>> import astropy.units as u
 
 .. _getting_started_reading:
 
@@ -213,8 +214,11 @@ channels), while for others this selects the specified channels.
 
 .. _getting_started_writing:
 
-Writing to Files
-================
+Writing to Files and Format Conversion
+======================================
+
+Writing to a File
+-----------------
 
 To write data to disk, we again use the master ``open``.  Writing data in a
 particular format requires both the header and data samples.  For modifying an
@@ -224,14 +228,16 @@ As a simple example, let's read in the single-channel, 8-threaded sample VDIF
 file and rewrite it as an 8-channel, single-thread one, which for example, may
 be necessary for compatibility with certain data reduction codes::
 
-    >>> fh = vdif.open(SAMPLE_VDIF, 'rs')
-    >>> fho = vdif.open('test_vdif.vdif', 'ws',
-    ...                 nthread=fh.nchan, nchan=fh.nthread,
-    ...                 frames_per_second=fh.frames_per_second,
-    ...                 samples_per_frame=fh.samples_per_frame // 8,
-    ...                 complex_data=fh.complex_data,
-    ...                 bps=fh.bps, edv=fh.header0.edv,
-    ...                 station=fh.header0.station, time=fh.time0)
+    >>> import baseband.vdif as vdif
+    >>> from baseband.data import SAMPLE_VDIF
+    >>> fr = vdif.open(SAMPLE_VDIF, 'rs')
+    >>> fw = vdif.open('test_vdif.vdif', 'ws',
+    ...                nthread=fr.nchan, nchan=fr.nthread,
+    ...                frames_per_second=fr.frames_per_second,
+    ...                samples_per_frame=fr.samples_per_frame // 8,
+    ...                complex_data=fr.complex_data,
+    ...                bps=fr.bps, edv=fr.header0.edv,
+    ...                station=fr.header0.station, time=fr.time0)
 
 The minimal parameters needed to generate a file are listed under the
 documentation for each file format's ``open``, though the comprehensive
@@ -245,41 +251,49 @@ requires each frame's payload contain 5000 bytes, and ``nchan`` is a factor of 8
 larger, we decrease ``samples_per_frame``, the number of complete (i.e. all
 channels included) samples per frame, by a factor of 8.
 
-Writing the data to file,
+Writing the data to file (noting that in this case we do not need to reshape
+the data to fit ``fho``'s payload shape),
 
 ::
 
-    >>> data = fh.read()    # Read data.
-    >>> fho.write(data)     # Write data.  In this case, no need to reshape.
-    >>> fh.close()
-    >>> fho.close()
+    >>> while fr.tell() < fr.size:
+    ...     fw.write(fr.read(fr.samples_per_frame))
+    >>> fr.close()
+    >>> fw.close()
 
-In the case of large files, reading and writing should be done in small chunks
-to minimize memory usage.  Baseband stores only the data frame or frame set
-being read or written to in memory.
+For our sample file, we could simply have written
+
+    ``fw.write(fr.read())``
+
+instead of the loop, but for large files, reading and writing should be done in
+smaller chunks as above to minimize memory usage.  Baseband stores only the data
+frame or frame set being read or written to in memory.
 
 We can check the validity of our new file by re-opening it::
 
-    >>> fh = vdif.open(SAMPLE_VDIF, 'rs')
-    >>> fho = vdif.open('test_vdif.vdif', 'rs')
-    >>> fho.nchan
+    >>> fr = vdif.open(SAMPLE_VDIF, 'rs')
+    >>> fh = vdif.open('test_vdif.vdif', 'rs')
+    >>> fh.nchan
     8
-    >>> fho.nthread
+    >>> fh.nthread
     1
-    >>> np.all(fh.read() == fho.read())
+    >>> np.all(fr.read() == fh.read())
     True
+    >>> fr.close()
     >>> fh.close()
-    >>> fho.close()
 
 File Format Conversion
-======================
+----------------------
 
-An alternative solution is to write the samples to VDIF.  Since we don't
-have a VDIF header handy, we pass the relevant Mark 4 header values into
-``vdif.open`` in order to create one.  Let's write out the first 1920 samples::
+It is often preferable to convert data from one file format to another that
+offers wider compatibility, or better fits the structure of the data.  As an
+example, we convert the sample Mark 4 data to VDIF.
 
-    >>> from baseband import vdif
-    >>> import astropy.units as u
+Since we don't have a VDIF header handy, we pass the relevant Mark 4 header
+values into ``vdif.open`` to create one. 
+
+    >>> import baseband.mark4 as mark4
+    >>> from baseband.data import SAMPLE_MARK4
     >>> fr = mark4.open(SAMPLE_MARK4, 'rs', ntrack=64, decade=2010)
     >>> spf = 640  # fanout * 160 = 640 invalid samples per Mark 4 frame
     >>> f_rate = (fr.frames_per_second * fr.samples_per_frame / spf)*u.Hz
@@ -287,33 +301,30 @@ have a VDIF header handy, we pass the relevant Mark 4 header values into
     ...                samples_per_frame=spf, nchan=fr.nchan,
     ...                framerate=f_rate, complex_data=fr.complex_data, 
     ...                bps=fr.bps, time=fr.time0)
-    >>> d = fr.read(1920)
-    >>> fw.write(d[:640], invalid_data=True)
-    >>> fw.write(d[640:])
+
+We choose ``edv = 1`` since it is the simplest VDIF EDV whose header includes a
+frame rate (see the :ref:`VDIF documentation <vdif>`). The concept of threads
+does not exist in Mark 4, so it effectively has ``nthread = 1``.  As discussed
+in the :ref:`Mark 4 documentation <mark4>`, the data at the start of each frame
+overwritten by the header are represented by invalid samples in the stream
+reader.  We set ``samples_per_frame`` to ``640`` so that each section of invalid
+data is captured in a single frame.  The framerate is then set to 50 kHz for
+consistency.
+
+We now write the data to file, manually flagging each invalid data frame::
+
+    >>> while fr.tell() < fr.size:
+    ...     d = fr.read(fr.samples_per_frame)
+    ...     fw.write(d[:640], invalid_data=True)
+    ...     fw.write(d[640:])
     >>> fr.close()
     >>> fw.close()
 
-There are some format-specific arguments that we have to manually set. We
-choose ``edv = 1`` since it is the simplest VDIF EDV whose header includes a
-frame rate (see the :ref:`documentation on VDIF <vdif>`). The concept of threads
-does not exist in Mark 4, so we set ``nthread = 1`` to keep the data the same
-shape when read out using ``vdif.open``.  As discussed in the :ref:`Mark 4
-documentation <mark4>`, the data at the start of each frame overwritten by the
-header is represented by invalid samples in the stream reader.  We set
-``samples_per_frame`` to ``640`` so that each section of invalid data is
-captured in a single frame.  Only one such section exists in our data,
-and we manually flag it as invalid.  The framerate is naturally set to 50 kHz
-once we set the ``samples_per_frame``.
+Lastly, we check our new file::
 
-Lastly, we check that we can read back the data::
-
-    >>> fr = vdif.open('m4convert.vdif', 'rs')
-    >>> d2 = fr.read()
-    >>> np.array_equal(d, d2)
+    >>> fr = mark4.open(SAMPLE_MARK4, 'rs', ntrack=64, decade=2010)
+    >>> fh = vdif.open('m4convert.vdif', 'rs')
+    >>> np.all(fr.read() == fh.read())
     True
     >>> fr.close()
-
-
-
-
-    
+    >>> fh.close()
