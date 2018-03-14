@@ -445,6 +445,7 @@ class VLBIHeaderBase(object):
         if verify:
             self.verify()
 
+    @profile
     def __getitem__(self, item):
         """Get the value a particular header item from the header words."""
         try:

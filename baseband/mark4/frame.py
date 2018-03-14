@@ -70,6 +70,7 @@ class Mark4Frame(VLBIFrameBase):
     _header_class = Mark4Header
     _payload_class = Mark4Payload
 
+    @profile
     def __init__(self, header, payload, valid=None, verify=True):
         self.header = header
         self.payload = payload
@@ -100,6 +101,7 @@ class Mark4Frame(VLBIFrameBase):
             self.header['communication_error'] = True
 
     @classmethod
+    @profile
     def fromfile(cls, fh, ntrack, decade=None, ref_time=None, verify=True):
         """Read a frame from a filehandle.
 
@@ -148,6 +150,7 @@ class Mark4Frame(VLBIFrameBase):
         return cls(header, payload, verify=verify)
 
     @property
+    @profile
     def data(self):
         """Decode the payload, setting the header to ``invalid_data_value``."""
         data = np.empty(self.shape, self.dtype)

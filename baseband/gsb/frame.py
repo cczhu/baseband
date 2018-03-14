@@ -34,6 +34,7 @@ class GSBFrame(VLBIFrameBase):
     _payload_class = GSBPayload
 
     @classmethod
+    @profile
     def fromfile(cls, fh_ts, fh_raw, payloadsize=1 << 24, nchan=1, bps=4,
                  complex_data=False, valid=True, verify=True):
         """Read a frame from timestamp and raw data file handles.

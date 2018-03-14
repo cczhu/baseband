@@ -19,6 +19,7 @@ class Mark5BFileReader(VLBIFileBase):
     Adds ``read_frame`` and ``find_header`` methods to the VLBI file wrapper.
     """
 
+    @profile
     def read_frame(self, nchan, bps=2, kday=None, ref_time=None):
         """Read a single frame (header plus payload).
 
@@ -229,6 +230,7 @@ class Mark5BStreamReader(VLBIStreamReaderBase, Mark5BFileReader):
         last_header.infer_kday(self.start_time)
         return last_header
 
+    @profile
     def read(self, count=None, fill_value=0., out=None):
         """Read a number of complete (or subset) samples.
 
@@ -297,6 +299,7 @@ class Mark5BStreamReader(VLBIStreamReaderBase, Mark5BFileReader):
 
         return out
 
+    @profile
     def _read_frame(self, fill_value=0.):
         self.fh_raw.seek(self.offset // self.samples_per_frame *
                          self._frame.size)

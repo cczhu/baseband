@@ -24,6 +24,7 @@ class Mark4FileReader(VLBIFileBase):
     Adds ``read_frame`` and ``find_frame`` methods to the VLBI file wrapper.
     """
 
+    @profile
     def read_frame(self, ntrack, decade=None, ref_time=None):
         """Read a single frame (header plus payload).
 
@@ -351,6 +352,7 @@ class Mark4StreamReader(VLBIStreamReaderBase, Mark4FileReader):
         last_header.infer_decade(self.start_time)
         return last_header
 
+    @profile
     def read(self, count=None, fill_value=0., out=None):
         """Read count samples.
 
@@ -410,6 +412,7 @@ class Mark4StreamReader(VLBIStreamReaderBase, Mark4FileReader):
 
         return out
 
+    @profile
     def _read_frame(self):
         frame_nr = self.offset // self.samples_per_frame
         self.fh_raw.seek(self.offset0 + frame_nr * self.header0.framesize)

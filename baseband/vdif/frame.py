@@ -66,6 +66,7 @@ class VDIFFrame(VLBIFrameBase):
     _header_class = VDIFHeader
     _payload_class = VDIFPayload
 
+    @profile
     def __init__(self, header, payload, valid=None, verify=True):
         self.header = header
         self.payload = payload
@@ -99,6 +100,7 @@ class VDIFFrame(VLBIFrameBase):
         self.header['invalid_data'] = not valid
 
     @classmethod
+    @profile
     def fromfile(cls, fh, edv=None, verify=True):
         """Read a frame from a filehandle.
 
@@ -200,6 +202,7 @@ class VDIFFrameSet(object):
             self.header0 = header0
 
     @classmethod
+    @profile
     def fromfile(cls, fh, thread_ids=None, sort=True, edv=None, verify=True):
         """Read a frame set from a file, starting at the current location.
 
@@ -312,6 +315,7 @@ class VDIFFrameSet(object):
         return cls(frames)
 
     @property
+    @profile
     def data(self):
         """Decode the payload."""
         if self._data is None:

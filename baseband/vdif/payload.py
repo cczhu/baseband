@@ -133,6 +133,7 @@ class VDIFPayload(VLBIPayloadBase):
 
     _sample_shape_maker = namedtuple('SampleShape', 'nchan')
 
+    @profile
     def __init__(self, words, header=None,
                  nchan=1, bps=2, complex_data=False):
         if header is not None:
@@ -151,6 +152,7 @@ class VDIFPayload(VLBIPayloadBase):
                                           complex_data=complex_data)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, header):
         """Read payload from file handle and decode it into data.
 

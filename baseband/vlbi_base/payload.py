@@ -46,6 +46,7 @@ class VLBIPayloadBase(object):
     # Placeholder for sample shape named tuple.
     _sample_shape_maker = None
 
+    @profile
     def __init__(self, words, bps=2, sample_shape=(), complex_data=False):
         self.words = words
         if self._sample_shape_maker is not None:
@@ -65,6 +66,7 @@ class VLBIPayloadBase(object):
                              .format(self._dtype_word))
 
     @classmethod
+    @profile
     def fromfile(cls, fh, *args, **kwargs):
         """Read payload from file handle and decode it into data.
 
@@ -228,6 +230,7 @@ class VLBIPayloadBase(object):
 
         return words_slice, data_slice
 
+    @profile
     def __getitem__(self, item=()):
         decoder = self._decoders[self._coder]
         if item is () or item == slice(None):

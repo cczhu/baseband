@@ -88,6 +88,7 @@ class GSBPayload(VLBIPayloadBase):
             return cls._sample_shape_maker_nthread(*args)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, payloadsize=None, bps=4, nchan=1,
                  complex_data=False):
         """Read payloads from several threads.

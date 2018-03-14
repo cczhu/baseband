@@ -251,6 +251,7 @@ class Mark4Payload(VLBIPayloadBase):
 
     _sample_shape_maker = namedtuple('SampleShape', 'nchan')
 
+    @profile
     def __init__(self, words, header=None, nchan=1, bps=2, fanout=1):
         if header is not None:
             nchan = header.nchan
@@ -265,6 +266,7 @@ class Mark4Payload(VLBIPayloadBase):
         self._coder = (self.sample_shape.nchan, bps, fanout)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, header):
         """Read payload from file handle and decode it into data.
 

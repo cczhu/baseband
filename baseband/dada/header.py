@@ -81,6 +81,7 @@ class DADAHeader(OrderedDict):
                  ('RESOLUTION', 1),
                  ('DSB', 1)]
 
+    @profile
     def __init__(self, *args, **kwargs):
         verify = kwargs.pop('verify', True)
         mutable = kwargs.pop('mutable', True)
@@ -157,6 +158,7 @@ class DADAHeader(OrderedDict):
         return lines
 
     @classmethod
+    @profile
     def fromfile(cls, fh, verify=True):
         """
         Reads in DADA header block from a file.

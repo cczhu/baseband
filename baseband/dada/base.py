@@ -108,6 +108,7 @@ class DADAFileReader(VLBIFileBase):
     Adds a ``read_frame`` method to the basic VLBI binary file wrapper. By
     default, the payload is mapped rather than fully read into physical memory.
     """
+    @profile
     def read_frame(self, memmap=True):
         """Read the frame header and read or map the corresponding payload.
 
@@ -244,6 +245,7 @@ class DADAStreamReader(DADAStreamBase, VLBIStreamReaderBase, DADAFileReader):
         last_frame = self.read_frame(memmap=True)
         return last_frame.header
 
+    @profile
     def read(self, count=None, out=None):
         """Read a number of complete (or subset) samples.
 
@@ -298,6 +300,7 @@ class DADAStreamReader(DADAStreamBase, VLBIStreamReaderBase, DADAFileReader):
 
         return out
 
+    @profile
     def _get_frame(self, frame_nr):
         self.fh_raw.seek(frame_nr * self.header0.framesize)
         self._frame = self.read_frame(memmap=True)

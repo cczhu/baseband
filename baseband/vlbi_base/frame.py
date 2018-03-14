@@ -84,6 +84,7 @@ class VLBIFrameBase(object):
         self._valid = valid
 
     @classmethod
+    @profile
     def fromfile(cls, fh, *args, **kwargs):
         """Read a frame from a filehandle.
 
@@ -146,6 +147,7 @@ class VLBIFrameBase(object):
 
     # Header behaves as a dictionary, while Payload can be indexed/sliced.
     # Let frame behave appropriately.
+    @profile
     def __getitem__(self, item=()):
         if isinstance(item, six.string_types):
             return self.header.__getitem__(item)

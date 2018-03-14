@@ -27,6 +27,7 @@ class GSBTimeStampIO(VLBIFileBase):
         fh_raw = io.TextIOWrapper(fh_raw)
         super(GSBTimeStampIO, self).__init__(fh_raw)
 
+    @profile
     def read_timestamp(self):
         """Read a single timestamp.
 
@@ -58,6 +59,7 @@ class GSBFileReader(VLBIFileBase):
     Adds ``read_payload`` method to the basic VLBI binary file wrapper.
     """
 
+    @profile
     def read_payload(self, payloadsize, nchan=1, bps=4, complex_data=False):
         """Read a single block.
 
@@ -269,6 +271,7 @@ class GSBStreamReader(GSBStreamBase, VLBIStreamReaderBase):
             last_header = self.header0.__class__(second_last_line_tuple)
         return last_header
 
+    @profile
     def read(self, count=None, fill_value=0., out=None):
         """Read a number of complete (or subset) samples.
 
@@ -332,6 +335,7 @@ class GSBStreamReader(GSBStreamBase, VLBIStreamReaderBase):
 
         return out
 
+    @profile
     def _read_frame(self, fill_value=0., out=None):
         frame_nr = self.offset // self.samples_per_frame
         self.fh_ts.seek(self.header0.seek_offset(frame_nr))

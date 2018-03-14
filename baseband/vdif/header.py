@@ -122,6 +122,7 @@ class VDIFHeader(VLBIHeaderBase):
                                       VDIFBaseHeader)
         return super(VDIFHeader, cls).__new__(cls)
 
+    @profile
     def __init__(self, words, edv=None, verify=True, **kwargs):
         if edv is not None:
             self._edv = edv
@@ -140,6 +141,7 @@ class VDIFHeader(VLBIHeaderBase):
                                 'station_id')))
 
     @classmethod
+    @profile
     def fromfile(cls, fh, edv=None, verify=True):
         """Read VDIF Header from file.
 
@@ -346,6 +348,7 @@ class VDIFHeader(VLBIHeaderBase):
         assert int(station_id) == station_id
         self['station_id'] = station_id
 
+    @profile
     def get_time(self, sample_rate=None, frame_nr=None):
         """
         Convert ref_epoch, seconds, and frame_nr to Time object.
@@ -392,6 +395,7 @@ class VDIFHeader(VLBIHeaderBase):
         return (ref_epochs[self['ref_epoch']] +
                 TimeDelta(self['seconds'], offset, format='sec', scale='tai'))
 
+    @profile
     def set_time(self, time, sample_rate=None, frame_nr=None):
         """
         Convert Time object to ref_epoch, seconds, and frame_nr.

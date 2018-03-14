@@ -112,6 +112,7 @@ class Mark5BPayload(VLBIPayloadBase):
 
     _sample_shape_maker = namedtuple('SampleShape', 'nchan')
 
+    @profile
     def __init__(self, words, nchan=1, bps=2, complex_data=False):
         if complex_data:
             raise ValueError("Mark5B format does not support complex data.")
@@ -121,6 +122,7 @@ class Mark5BPayload(VLBIPayloadBase):
                                             complex_data=False)
 
     @classmethod
+    @profile
     def fromdata(cls, data, bps=2):
         """Encode data as payload, using a given number of bits per sample.
 

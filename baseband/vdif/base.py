@@ -78,6 +78,7 @@ class VDIFFileReader(VLBIFileBase):
         """
         return VDIFFrame.fromfile(self.fh_raw)
 
+    @profile
     def read_frameset(self, thread_ids=None, sort=True, edv=None, verify=True):
         """Read a single frame (header plus payload).
 
@@ -356,6 +357,7 @@ class VDIFStreamReader(VDIFStreamBase, VLBIStreamReaderBase, VDIFFileReader):
         self.fh_raw.seek(raw_offset)
         return last_header
 
+    @profile
     def read(self, count=None, fill_value=0., out=None):
         """Read a number of complete (or subset) samples.
 
@@ -421,6 +423,7 @@ class VDIFStreamReader(VDIFStreamBase, VLBIStreamReaderBase, VDIFFileReader):
 
         return out
 
+    @profile
     def _read_frame_set(self):
         self.fh_raw.seek(self.offset // self.samples_per_frame *
                          self._framesetsize)

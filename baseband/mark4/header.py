@@ -302,6 +302,7 @@ class Mark4Header(Mark4TrackHeader):
               3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33]])
                  .reshape(1, 16, 2) - 2)}
 
+    @profile
     def __init__(self, words, ntrack=None, decade=None, ref_time=None,
                  verify=True):
         if words is None:
@@ -366,6 +367,7 @@ class Mark4Header(Mark4TrackHeader):
         return self._track_assignment(self.ntrack, self.bps, self.fanout)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, ntrack, decade=None, ref_time=None, verify=True):
         """Read Mark 4 header from file.
 

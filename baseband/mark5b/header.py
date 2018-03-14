@@ -77,6 +77,7 @@ class Mark5BHeader(VLBIHeaderBase):
 
     kday = None
 
+    @profile
     def __init__(self, words, kday=None, ref_time=None, verify=True, **kwargs):
         super(Mark5BHeader, self).__init__(words, verify=False, **kwargs)
         if kday is not None:

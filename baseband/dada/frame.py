@@ -55,6 +55,7 @@ class DADAFrame(VLBIFrameBase):
     _payload_class = DADAPayload
 
     @classmethod
+    @profile
     def fromfile(cls, fh, memmap=True, valid=True, verify=True):
         """Read a frame from a filehandle, possible mapping the payload.
 

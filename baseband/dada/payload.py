@@ -55,6 +55,7 @@ class DADAPayload(VLBIPayloadBase):
                                           bps=bps, complex_data=complex_data)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, header=None, memmap=False, payloadsize=None,
                  **kwargs):
         """Read or map encoded data in file.

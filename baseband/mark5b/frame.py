@@ -58,6 +58,7 @@ class Mark5BFrame(VLBIFrameBase):
     _payload_class = Mark5BPayload
     _fill_pattern = 0x11223344
 
+    @profile
     def __init__(self, header, payload, valid=None, verify=True):
         if valid is None:
             # Is this payload OK?  Usually yes, so short-circuit on first few.
@@ -69,6 +70,7 @@ class Mark5BFrame(VLBIFrameBase):
         super(Mark5BFrame, self).__init__(header, payload, valid, verify)
 
     @classmethod
+    @profile
     def fromfile(cls, fh, nchan, bps=3, kday=None, ref_time=None, valid=None,
                  verify=True):
         """Read a frame from a filehandle.
