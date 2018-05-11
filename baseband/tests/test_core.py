@@ -8,7 +8,8 @@ import astropy.units as u
 
 from .. import open as baseband_open, file_info
 from ..data import (SAMPLE_MARK4 as SAMPLE_M4, SAMPLE_MARK5B as SAMPLE_M5B,
-                    SAMPLE_VDIF, SAMPLE_MWA_VDIF as SAMPLE_MWA, SAMPLE_DADA)
+                    SAMPLE_VDIF, SAMPLE_MWA_VDIF as SAMPLE_MWA, SAMPLE_DADA,
+                    SAMPLE_PUPPI)
 
 
 @pytest.mark.parametrize(
@@ -60,6 +61,10 @@ def test_open_wrong_args():
 
     with pytest.raises(ValueError) as exc:  # inconsistent nchan.
         baseband_open(SAMPLE_DADA, 'rs', nchan=8)
+    assert "inconsistent" in str(exc.value)
+
+    with pytest.raises(ValueError) as exc:  # inconsistent samples_per_frame.
+        baseband_open(SAMPLE_PUPPI, 'rs', samples_per_frame=8192)
     assert "inconsistent" in str(exc.value)
 
 

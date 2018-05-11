@@ -1,12 +1,13 @@
 # Licensed under the GPLv3 - see LICENSE
 """Routines to obtain information on baseband files."""
 import importlib
+import warnings
 
 import numpy as np
 
 __all__ = ['file_info', 'open']
 
-FILE_FORMATS = ('dada', 'mark4', 'mark5b', 'vdif', 'gsb')
+FILE_FORMATS = ('dada', 'guppi', 'mark4', 'mark5b', 'vdif', 'gsb')
 
 
 def file_info(name, format=FILE_FORMATS, **kwargs):
@@ -60,7 +61,9 @@ def file_info(name, format=FILE_FORMATS, **kwargs):
     # us to determine whether the file is of the correct format.
     mode = 'rb' if format != 'gsb' else 'rt'
     with module.open(name, mode=mode) as fh:
-        info = fh.info
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            info = fh.info
 
     # If not the right format, return immediately.
     if not info:
