@@ -74,6 +74,7 @@ format extensions such as VDIF EDV.
 .. toctree::
    :maxdepth: 1
 
+   tutorials/new_format
    tutorials/new_edv
 
 .. _project_details_toc:
