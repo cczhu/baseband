@@ -122,3 +122,22 @@ class CRC(object):
         for i in range(0, len(stream) - len(self)):
             stream[i:i+pol_bin.size] ^= (pol_bin & stream[i])
         return stream[-len(self):]
+
+
+# PY2
+def gcd(a, b):
+    """Calculate the Greatest Common Divisor of a and b.
+
+    Unless b==0, the result will have the same sign as b (so that when
+    b is divided by it, the result comes out positive).
+    """
+    # Transliterated from Python 2.7's fractions.gcd.  Can just use math.gcd
+    # once we dropy Python 2 support.
+    while b:
+        a, b = b, a % b
+    return a
+
+
+def lcm(a, b):
+    """Calculate the least common multiple of a and b."""
+    return abs(a * b) // gcd(a, b)
