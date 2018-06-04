@@ -1,6 +1,7 @@
 # Licensed under the GPLv3 - see LICENSE
 from __future__ import division, unicode_literals, print_function
 
+import numpy as np
 import astropy.units as u
 from astropy.utils import lazyproperty
 
@@ -8,6 +9,7 @@ from ..helpers import sequentialfile as sf
 from ..vlbi_base.base import (make_opener, VLBIFileBase, VLBIFileReaderBase,
                               VLBIStreamBase, VLBIStreamReaderBase,
                               VLBIStreamWriterBase)
+from ..vlbi_base.utils import lcm
 from .header import GUPPIHeader
 from .payload import GUPPIPayload
 from .frame import GUPPIFrame
@@ -188,20 +190,86 @@ class GUPPIStreamReader(GUPPIStreamBase, VLBIStreamReaderBase):
         header0 = GUPPIHeader.fromfile(fh_raw)
         super(GUPPIStreamReader, self).__init__(fh_raw, header0,
                                                 squeeze=squeeze, subset=subset)
+        # Store number of frames, for finding last header.
+        raw_offset = self.fh_raw.tell()
+        self._nframes, self._partial_frame_nbytes = divmod(
+            self.fh_raw.seek(0, 2), self.header0.frame_nbytes)
+        # If there is a partial last frame.
+        if self._partial_frame_nbytes > 0:
+            # If partial last frame contains payload bytes (assuming header
+            # length doesn't change throughout a GUPPI observation).
+            if self._partial_frame_nbytes > self.header0.nbytes:
+                self._nframes += 1
+                # If there's only one frame and it's incomplete.
+                if self._nframes == 1:
+                    self._header0 = self._last_header
+                    # Include overlap for self-consistency with stop_time.
+                    self.samples_per_frame = (self.header0.samples_per_frame -
+                                              self.header0.overlap)
+            # Otherwise, ignore the partial frame unless it's the only frame,
+            # in which case raise an EOFError.
+            else:
+                if self._nframes == 0:
+                    raise EOFError('file (of {0} bytes) appears to end without'
+                                   'any payload.'.format(
+                                       self._partial_frame_nbytes))
+        self.fh_raw.seek(raw_offset)
 
     @lazyproperty
     def _last_header(self):
-        """Header of the last file for this stream."""
+        """Header of the last file for this stream.
+
+        If last frame is prematurely truncated, header's payload_nbytes is
+        reduced accordingly to let the stream reader read to the end of file.
+        """
         # Seek forward rather than backward, as last frame often has missing
         # bytes.
-        nframes, fframe = divmod(self.fh_raw.seek(0, 2),
-                                 self.header0.frame_nbytes)
-        self.fh_raw.seek((nframes - 1) * self.header0.frame_nbytes)
-        return self.fh_raw.read_header()
+        raw_offset = self.fh_raw.tell()
+        self.fh_raw.seek((self._nframes - 1) * self.header0.frame_nbytes)
+        header = self.fh_raw.read_header()
+        if self._partial_frame_nbytes > self.header0.nbytes:
+            header.mutable = True
+            # Payload should have integer number of both words and complete
+            # samples.
+            payload_block = lcm(
+                GUPPIPayload._dtype_word.itemsize,
+                self.header0.bps * (2 if self.header0.complex_data else 1) *
+                np.prod(self.sample_shape) // 8)
+            header.payload_nbytes = payload_block * (
+                (self._partial_frame_nbytes - header.nbytes) // payload_block)
+            # Set the overlap such that the number of valid samples is equal to
+            # or less than that for the first frame (this still works if
+            # nframes = 1, since we haven't yet overridden).
+            missing_samples = (header.samples_per_frame -
+                               self.header0.samples_per_frame)
+            header.overlap = max(0, self.header0.overlap - missing_samples)
+            header.mutable = False
+        self.fh_raw.seek(raw_offset)
+        return header
+
+    @lazyproperty
+    def stop_time(self):
+        """Time at the end of the file, just after the last sample.
+
+        See also `start_time` for the start time of the file, and `time` for
+        the time of the sample pointer's current offset.
+        """
+        return (self._get_time(self._last_header) +
+                ((self._last_header.samples_per_frame +
+                  self._last_header.overlap) /
+                 self.sample_rate).to(u.s))
 
     def _read_frame(self, index):
-        self.fh_raw.seek(index * self.header0.frame_nbytes)
-        frame = self.fh_raw.read_frame(memmap=True)
+        if index < self._nframes - 1:
+            self.fh_raw.seek(index * self.header0.frame_nbytes)
+            frame = self.fh_raw.read_frame(memmap=True)
+        else:
+            self.fh_raw.seek(index * self.header0.frame_nbytes +
+                             self.header0.nbytes)
+            last_header = self._last_header
+            last_payload = GUPPIPayload.fromfile(self.fh_raw, memmap=True,
+                                                 header=last_header)
+            frame = GUPPIFrame(last_header, last_payload)
         assert (frame.header['PKTIDX'] - self.header0['PKTIDX'] ==
                 index * self._packets_per_frame)
         return frame
